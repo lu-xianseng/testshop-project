@@ -1,0 +1,91 @@
+version: '3.8'
+
+services:
+  # 1. MySQL 5.7 (兼容旧系统)
+  mysql:
+    image: mysql:5.7
+    container_name: testshop-mysql
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --innodb-buffer-pool-size=128M
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: testshop_db
+      MYSQL_USER: tester
+      MYSQL_PASSWORD: tester123
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - mysql_data:/var/lib/mysql
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "tester", "-ptester123"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 2. Redis 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: testshop-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - test-network
+
+  # 3. Nginx 反向代理
+  nginx:
+    image: nginx:alpine
+    container_name: testshop-nginx
+    ports:
+      - "88:80"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - app
+    networks:
+      - test-network
+
+  # 4. Python App (FastAPI)
+  app:
+    build: ./app
+    container_name: testshop-app
+    ports:
+      - "8888:8000"
+    environment:
+      DATABASE_URL: mysql+pymysql://tester:tester123@mysql:3306/testshop_db?charset=utf8mb4
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - test-network
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2
+
+  # 5. Locust 性能测试平台
+  locust:
+    image: locustio/locust:latest
+    container_name: testshop-locust
+    ports:
+      - "8089:8089"
+    volumes:
+      - ./tests/performance:/home/locust
+    depends_on:
+      - app
+    networks:
+      - test-network
+    # 默认不启动压测，等待用户在 Web UI 操作，或者取消注释下面一行进行命令行压测
+    # command: -f /home/locust/locustfile.py --host http://app:8000 --headless -u 20 -r 2 -t 1m
+
+volumes:
+  mysql_data:
+
+networks:
+  test-network:
+    driver: bridge
