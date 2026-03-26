@@ -5,6 +5,7 @@
 python、docker、mysql、redis、nginx、fastapi、pytest、locust、requests
 
 ## 项目结构
+```text
 testshop-project/
 ├── app/                  # 被测应用代码 (Python)
 │   ├── main.py
@@ -23,6 +24,7 @@ testshop-project/
 ├── docker-compose.yml    # 编排文件
 ├── .env                  # 环境变量
 └── README.md
+```
 
 ## 项目启动
 在项目根目录 (testshop-performance) 执行：
